@@ -27,21 +27,21 @@
         min-height: 2rem;
     }
 
-    #mount-content .mount-maintenance-grid > .stat {
-        min-height: 8rem;
-        padding-bottom: 1.25rem;
-        padding-top: 1.25rem;
-    }
-
-    #mount-content .mount-maintenance-grid .mount-stat-value-compact {
-        font-size: 1.35rem;
-        line-height: 1.65rem;
+    #mount-content .mount-cache-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: flex-end;
     }
 
     #mount-content .mount-stat-grid {
         display: grid;
         gap: 0;
         grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    #mount-content .mount-cache-storage-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     #mount-content .mount-stat-grid > .stat {
@@ -55,6 +55,14 @@
     }
 
     #mount-content .mount-stat-grid > .stat:nth-child(n + 5) {
+        border-top: 1px dashed color-mix(in oklab, var(--color-base-content) 12%, transparent);
+    }
+
+    #mount-content .mount-cache-storage-grid > .stat:nth-child(3n + 1) {
+        border-left: 0;
+    }
+
+    #mount-content .mount-cache-storage-grid > .stat:nth-child(n + 4) {
         border-top: 1px dashed color-mix(in oklab, var(--color-base-content) 12%, transparent);
     }
 
@@ -79,6 +87,10 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
+        #mount-content .mount-cache-storage-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
         #mount-content .mount-stat-grid > .stat:nth-child(odd) {
             border-left: 0;
         }
@@ -86,11 +98,32 @@
         #mount-content .mount-stat-grid > .stat:nth-child(n + 3) {
             border-top: 1px dashed color-mix(in oklab, var(--color-base-content) 12%, transparent);
         }
+
+        #mount-content .mount-cache-storage-grid > .stat:nth-child(3n + 1) {
+            border-left: 1px dashed color-mix(in oklab, var(--color-base-content) 16%, transparent);
+        }
+
+        #mount-content .mount-cache-storage-grid > .stat:nth-child(odd) {
+            border-left: 0;
+        }
+
+        #mount-content .mount-cache-storage-grid > .stat:nth-child(n + 3) {
+            border-top: 1px dashed color-mix(in oklab, var(--color-base-content) 12%, transparent);
+        }
     }
 
     @media (max-width: 639px) {
         #mount-content .mount-stat-grid {
             grid-template-columns: 1fr;
+        }
+
+        #mount-content .mount-stat-section-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        #mount-content .mount-cache-actions {
+            justify-content: flex-start;
         }
 
         #mount-content .mount-stat-grid > .stat {
@@ -514,18 +547,6 @@
             const cacheUsageTextClass = cacheUsageNumber > 90 ? 'text-error'
                 : cacheUsageNumber > 75 ? 'text-warning'
                     : 'text-success';
-            const cacheOldestItemName = detail.cache_oldest_item_name || '';
-            const cacheOldestItemAtUnixMs = detail.cache_oldest_item_at_unix_ms || 0;
-            const cacheOldestAgeSeconds = cacheOldestItemAtUnixMs > 0
-                ? Math.max(0, Math.floor((Date.now() - cacheOldestItemAtUnixMs) / 1000))
-                : 0;
-            const cacheOldestValue = cacheOldestItemAtUnixMs > 0
-                ? window.decypharrUtils.formatDuration(cacheOldestAgeSeconds)
-                : 'None';
-            const cacheOldestName = cacheOldestItemName
-                ? window.decypharrUtils.escapeHtml(cacheOldestItemName)
-                : 'No cached files';
-
             // New stats
             const activeDownloads = detail.cache_active_downloads || 0;
             const downloadSpeed = detail.cache_download_speed || 0;
@@ -538,36 +559,6 @@
                 : cacheHitRate > 0.5 ? 'text-warning'
                     : cacheHits + cacheMisses === 0 ? 'text-base-content/50' : 'text-error';
             const circuitBreakers = detail.cache_circuit_breakers || 0;
-            const cleanupRuns = detail.cache_cleanup_runs || 0;
-            const cleanupLastAtUnixMs = detail.cache_cleanup_last_at_unix_ms || 0;
-            const cleanupLastDurationMs = detail.cache_cleanup_last_duration_ms || 0;
-            const cleanupWarnings = detail.cache_cleanup_last_warning_count || 0;
-            const cleanupTotalFreedBytes = detail.cache_cleanup_total_freed_bytes || 0;
-            const cleanupTotalRemovedItems = detail.cache_cleanup_total_removed_items || 0;
-            const cleanupLastResult = detail.cache_cleanup_last_result || 'cleanup has not run yet';
-            const cleanupStatus = String(detail.cache_cleanup_last_status || (cleanupRuns > 0 ? 'healthy' : 'pending')).toLowerCase();
-            const cleanupStatusClass = cleanupStatus === 'warning' || cleanupWarnings > 0 ? 'text-warning'
-                : cleanupStatus === 'pending' ? 'text-base-content/50'
-                    : 'text-success';
-            const cleanupStatusLabel = cleanupStatus === 'warning' || cleanupWarnings > 0 ? 'Needs Attention'
-                : cleanupStatus === 'pending' ? 'Waiting'
-                    : 'OK';
-            const cleanupLastAgeSeconds = cleanupLastAtUnixMs > 0
-                ? Math.max(0, Math.floor((Date.now() - cleanupLastAtUnixMs) / 1000))
-                : 0;
-            const cleanupLastValue = cleanupLastAtUnixMs > 0
-                ? `${window.decypharrUtils.formatDuration(cleanupLastAgeSeconds)} ago`
-                : 'Not run';
-            const cleanupDurationText = cleanupLastDurationMs > 0 && cleanupLastDurationMs < 1000
-                ? `${cleanupLastDurationMs} ms`
-                : cleanupLastDurationMs > 0
-                    ? window.decypharrUtils.formatDuration(Math.ceil(cleanupLastDurationMs / 1000))
-                    : '-';
-            const cleanupLastDesc = cleanupLastAtUnixMs > 0
-                ? `Finished in ${cleanupDurationText}`
-                : 'Waiting for first cleanup';
-            const cleanupWarningsClass = cleanupWarnings > 0 ? 'text-warning' : 'text-success';
-            const cleanupResultText = window.decypharrUtils.escapeHtml(cleanupLastResult);
 
             let html = `
                 <div class="mount-stat-section-title">Current Activity</div>
@@ -608,17 +599,23 @@
 
                 <div class="mount-stat-section-header">
                     <div class="mount-stat-section-title">Cache Storage</div>
-                    <button type="button"
-                            class="btn btn-outline btn-sm mount-cache-action-btn"
-                            data-purge-cache
-                            data-cache-items="${cacheItems}"
-                            data-cache-size="${cacheTotalSize}"
-                            data-cache-max="${cacheMaxSize}">
-                        <i class="bi bi-trash3"></i>
-                        Purge Cache
-                    </button>
+                    <div class="mount-cache-actions">
+                        <button type="button" class="btn btn-outline btn-sm mount-cache-action-btn" data-run-cache-cleanup>
+                            <i class="bi bi-play-circle"></i>
+                            Run Cleanup
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline btn-sm mount-cache-action-btn"
+                                data-purge-cache
+                                data-cache-items="${cacheItems}"
+                                data-cache-size="${cacheTotalSize}"
+                                data-cache-max="${cacheMaxSize}">
+                            <i class="bi bi-trash3"></i>
+                            Purge Cache
+                        </button>
+                    </div>
                 </div>
-                <div class="mount-stat-grid">
+                <div class="mount-stat-grid mount-cache-storage-grid">
                     <div class="stat">
                         <div class="stat-figure text-info">
                             <i class="bi bi-archive text-2xl"></i>
@@ -643,14 +640,6 @@
                         <div class="stat-value mount-stat-value-compact text-accent">${formatNumber(activeCacheItems)}</div>
                         <div class="stat-desc">Resident in ${cacheType} memory</div>
                     </div>
-                    <div class="stat">
-                        <div class="stat-figure text-warning">
-                            <i class="bi bi-clock-history text-2xl"></i>
-                        </div>
-                        <div class="stat-title">Oldest Last Used</div>
-                        <div class="stat-value mount-stat-value-compact text-warning">${cacheOldestValue}</div>
-                        <div class="stat-desc mount-stat-wrap" title="${cacheOldestName}">${cacheOldestName}</div>
-                    </div>
             `;
 
             // Show circuit breaker warning if any are tripped
@@ -668,48 +657,6 @@
             }
 
             html += `
-                </div>
-
-                <div class="mount-stat-section-header">
-                    <div class="mount-stat-section-title">Cache Maintenance</div>
-                    <button type="button" class="btn btn-outline btn-sm mount-cache-action-btn" data-run-cache-cleanup>
-                        <i class="bi bi-play-circle"></i>
-                        Run Cleanup
-                    </button>
-                </div>
-                <div class="mount-stat-grid mount-maintenance-grid">
-                    <div class="stat">
-                        <div class="stat-figure ${cleanupStatusClass}">
-                            <i class="bi bi-check-circle text-2xl"></i>
-                        </div>
-                        <div class="stat-title">Cleanup Status</div>
-                        <div class="stat-value mount-stat-value-compact ${cleanupStatusClass}">${cleanupStatusLabel}</div>
-                        <div class="stat-desc mount-stat-wrap" title="${cleanupResultText}">${cleanupResultText}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-figure text-info">
-                            <i class="bi bi-arrow-repeat text-2xl"></i>
-                        </div>
-                        <div class="stat-title">Last Cleanup</div>
-                        <div class="stat-value mount-stat-value-compact text-info">${cleanupLastValue}</div>
-                        <div class="stat-desc">${cleanupLastDesc}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-figure text-warning">
-                            <i class="bi bi-trash3 text-2xl"></i>
-                        </div>
-                        <div class="stat-title">Cleanup Impact</div>
-                        <div class="stat-value mount-stat-value-compact text-warning">${window.decypharrUtils.formatBytes(cleanupTotalFreedBytes)}</div>
-                        <div class="stat-desc">${formatNumber(cleanupTotalRemovedItems)} files evicted since startup</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-figure ${cleanupWarningsClass}">
-                            <i class="bi bi-exclamation-circle text-2xl"></i>
-                        </div>
-                        <div class="stat-title">Cleanup Warnings</div>
-                        <div class="stat-value mount-stat-value-compact ${cleanupWarningsClass}">${formatNumber(cleanupWarnings)}</div>
-                        <div class="stat-desc">${cleanupWarnings > 0 ? 'Check nearby warn logs' : 'No warnings on last run'}</div>
-                    </div>
                 </div>
             `;
 
@@ -738,9 +685,9 @@
 
                 const result = await response.json();
                 const cache = result.cache || {};
-                const warnings = cache.cleanup_last_warning_count || 0;
-                const freedBytes = cache.cleanup_last_freed_bytes || 0;
-                const removedItems = cache.cleanup_last_removed_items || 0;
+                const warnings = cache.cleanup_warning_count || 0;
+                const freedBytes = cache.cleanup_freed_bytes || 0;
+                const removedItems = cache.cleanup_removed_items || 0;
                 const toastType = warnings > 0 ? 'warning' : 'success';
                 const toastMessage = warnings > 0
                     ? `Cache cleanup completed with ${warnings} warning(s).`

@@ -162,8 +162,8 @@ func (m *Manager) GetStats() map[string]interface{} {
 func (m *Manager) CleanupCache() map[string]interface{} {
 	if m.cache == nil {
 		return map[string]interface{}{
-			"cleanup_last_status": "unsupported",
-			"cleanup_last_result": "cache is not initialized",
+			"cleanup_status": "unsupported",
+			"cleanup_result": "cache is not initialized",
 		}
 	}
 	return m.cache.RunCleanup()

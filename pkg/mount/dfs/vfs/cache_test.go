@@ -173,15 +173,9 @@ func TestGetStatsReportsDiskItemsSeparatelyFromActiveItems(t *testing.T) {
 	if got := stats["total_size"]; got != int64(50) {
 		t.Fatalf("expected total cache size 50, got %#v", got)
 	}
-	if got := stats["oldest_item_name"]; got != "video.mkv" {
-		t.Fatalf("expected oldest item name video.mkv, got %#v", got)
-	}
-	if got, ok := stats["oldest_item_at_unix_ms"].(int64); !ok || got <= 0 {
-		t.Fatalf("expected positive oldest item access time, got %#v", stats["oldest_item_at_unix_ms"])
-	}
 }
 
-func TestRunCleanupReportsMaintenanceStats(t *testing.T) {
+func TestRunCleanupReportsResultStats(t *testing.T) {
 	cacheDir := t.TempDir()
 	entryDir := filepath.Join(cacheDir, "entry")
 	if err := os.MkdirAll(entryDir, 0755); err != nil {
@@ -204,29 +198,17 @@ func TestRunCleanupReportsMaintenanceStats(t *testing.T) {
 	c := newTestCache(cacheDir)
 	stats := c.RunCleanup()
 
-	if got := stats["cleanup_runs"]; got != int64(1) {
-		t.Fatalf("expected cleanup_runs 1, got %#v", got)
-	}
-	if got := stats["cleanup_last_status"]; got != "healthy" {
+	if got := stats["cleanup_status"]; got != "healthy" {
 		t.Fatalf("expected healthy cleanup status, got %#v", got)
 	}
-	if got := stats["cleanup_last_warning_count"]; got != int64(0) {
+	if got := stats["cleanup_warning_count"]; got != int64(0) {
 		t.Fatalf("expected no cleanup warnings, got %#v", got)
 	}
-	if got := stats["cleanup_last_removed_items"]; got != int64(1) {
+	if got := stats["cleanup_removed_items"]; got != int64(1) {
 		t.Fatalf("expected 1 removed item, got %#v", got)
 	}
-	if got := stats["cleanup_total_removed_items"]; got != int64(1) {
-		t.Fatalf("expected 1 total removed item, got %#v", got)
-	}
-	if got := stats["cleanup_last_freed_bytes"]; got != int64(50) {
+	if got := stats["cleanup_freed_bytes"]; got != int64(50) {
 		t.Fatalf("expected 50 freed bytes, got %#v", got)
-	}
-	if got := stats["cleanup_total_freed_bytes"]; got != int64(50) {
-		t.Fatalf("expected 50 total freed bytes, got %#v", got)
-	}
-	if got, ok := stats["cleanup_last_at_unix_ms"].(int64); !ok || got <= 0 {
-		t.Fatalf("expected positive cleanup timestamp, got %#v", stats["cleanup_last_at_unix_ms"])
 	}
 	if _, err := os.Stat(dataPath); !os.IsNotExist(err) {
 		t.Fatalf("expired data should be removed, stat err=%v", err)

@@ -45,12 +45,10 @@ type Cache struct {
 	config *config.FuseConfig
 	logger zerolog.Logger
 
-	items                *xsync.Map[string, *CacheItem]
-	totalSize            atomic.Int64
-	itemCount            atomic.Int64
-	diskItems            atomic.Int64
-	oldestDiskItemAccess atomic.Int64
-	oldestDiskItemName   atomic.Value
+	items     *xsync.Map[string, *CacheItem]
+	totalSize atomic.Int64
+	itemCount atomic.Int64
+	diskItems atomic.Int64
 
 	manager *manager.Manager
 
@@ -70,17 +68,6 @@ type Cache struct {
 	lastSpeedBytes  atomic.Int64 // bytes at last speed sample
 	lastSpeedTime   atomic.Int64 // unix nano at last speed sample
 	circuitBreakers atomic.Int32 // count of items with open circuit breakers
-
-	cleanupRuns              atomic.Int64
-	cleanupLastAt            atomic.Int64
-	cleanupLastDurationMs    atomic.Int64
-	cleanupLastWarnings      atomic.Int64
-	cleanupLastFreedBytes    atomic.Int64
-	cleanupLastRemovedItems  atomic.Int64
-	cleanupTotalFreedBytes   atomic.Int64
-	cleanupTotalRemovedItems atomic.Int64
-	cleanupLastStatus        atomic.Value
-	cleanupLastResult        atomic.Value
 }
 
 type candidateEntry struct {
@@ -104,27 +91,20 @@ type diskScanResult struct {
 }
 
 type cleanupRunSummary struct {
-	startedAt             time.Time
-	duration              time.Duration
-	scan                  diskScanResult
-	scanPasses            int
-	closedIdleItems       int
-	forcedClosedItems     int
-	removedDiskItems      int
-	sizeBefore            int64
-	sizeAfter             int64
-	freedBytes            int64
-	evictionSkipped       bool
-	status                string
-	result                string
-	totalFreedBytes       int64
-	totalRemovedDiskItems int64
-	runs                  int64
+	scan              diskScanResult
+	scanPasses        int
+	closedIdleItems   int
+	forcedClosedItems int
+	removedDiskItems  int
+	sizeBefore        int64
+	sizeAfter         int64
+	freedBytes        int64
+	evictionSkipped   bool
+	status            string
+	result            string
 }
 
 type purgeRunSummary struct {
-	startedAt        time.Time
-	duration         time.Duration
 	scan             diskScanResult
 	forcedClosed     int
 	removedDiskItems int
@@ -431,9 +411,7 @@ func (c *Cache) purgeCandidates(candidates []candidateEntry, totalSize int64) (i
 }
 
 func (c *Cache) storeDiskStats(candidates []candidateEntry, removed map[string]struct{}) {
-	var oldest candidateEntry
 	count := int64(0)
-	hasOldest := false
 
 	for _, candidate := range candidates {
 		if _, skip := removed[candidate.key]; skip {
@@ -441,25 +419,9 @@ func (c *Cache) storeDiskStats(candidates []candidateEntry, removed map[string]s
 		}
 
 		count++
-		if !hasOldest || candidate.atime.Before(oldest.atime) {
-			oldest = candidate
-			hasOldest = true
-		}
 	}
 
 	c.diskItems.Store(count)
-	if !hasOldest {
-		c.oldestDiskItemAccess.Store(0)
-		c.oldestDiskItemName.Store("")
-		return
-	}
-
-	name := oldest.key
-	if oldest.dataPath != "" {
-		name = filepath.Base(oldest.dataPath)
-	}
-	c.oldestDiskItemAccess.Store(oldest.atime.UnixMilli())
-	c.oldestDiskItemName.Store(name)
 }
 
 // newItem creates a new cache item. The underlying byte storage is a
@@ -637,8 +599,7 @@ func cleanupResultText(errors int, evictionSkipped bool) string {
 
 func (c *Cache) logCleanupSummary(summary cleanupRunSummary) {
 	c.logger.Debug().Msgf(
-		"DFS cache cleanup completed in %s: %s. Scanned %d cache item(s), %d busy, across %d scan pass(es). Cleanup: %s; freed %s. Result: %s.",
-		summary.duration.Round(time.Millisecond),
+		"DFS cache cleanup: %s. Scanned %d cache item(s), %d busy, across %d scan pass(es). Cleanup: %s; freed %s. Result: %s.",
 		cacheUsageText(summary.sizeAfter, c.config.CacheDiskSize),
 		len(summary.scan.candidates),
 		countBusyCandidates(summary.scan.candidates),
@@ -651,8 +612,7 @@ func (c *Cache) logCleanupSummary(summary cleanupRunSummary) {
 
 func (c *Cache) logPurgeSummary(summary purgeRunSummary) {
 	c.logger.Info().Msgf(
-		"DFS cache purge completed in %s: %s. Scanned %d cache item(s), skipped %d busy, force-closed %d idle item(s), removed %d disk item(s), freed %s. Result: %s.",
-		summary.duration.Round(time.Millisecond),
+		"DFS cache purge: %s. Scanned %d cache item(s), skipped %d busy, force-closed %d idle item(s), removed %d disk item(s), freed %s. Result: %s.",
 		cacheUsageText(summary.sizeAfter, c.config.CacheDiskSize),
 		len(summary.scan.candidates),
 		summary.skippedBusyItems,
@@ -663,8 +623,7 @@ func (c *Cache) logPurgeSummary(summary purgeRunSummary) {
 	)
 }
 
-func (c *Cache) storeCleanupSummary(summary cleanupRunSummary) cleanupRunSummary {
-	summary.duration = time.Since(summary.startedAt)
+func (c *Cache) finalizeCleanupSummary(summary cleanupRunSummary) cleanupRunSummary {
 	summary.freedBytes = summary.sizeBefore - summary.sizeAfter
 	if summary.freedBytes < 0 {
 		summary.freedBytes = 0
@@ -676,42 +635,20 @@ func (c *Cache) storeCleanupSummary(summary cleanupRunSummary) cleanupRunSummary
 		summary.status = "healthy"
 	}
 
-	summary.runs = c.cleanupRuns.Add(1)
-	summary.totalFreedBytes = c.cleanupTotalFreedBytes.Add(summary.freedBytes)
-	summary.totalRemovedDiskItems = c.cleanupTotalRemovedItems.Add(int64(summary.removedDiskItems))
-
-	c.cleanupLastAt.Store(summary.startedAt.UnixMilli())
-	c.cleanupLastDurationMs.Store(summary.duration.Milliseconds())
-	c.cleanupLastWarnings.Store(int64(summary.scan.errors))
-	c.cleanupLastFreedBytes.Store(summary.freedBytes)
-	c.cleanupLastRemovedItems.Store(int64(summary.removedDiskItems))
-	c.cleanupLastStatus.Store(summary.status)
-	c.cleanupLastResult.Store(summary.result)
-
 	return summary
 }
 
-func (c *Cache) cleanupStats() map[string]interface{} {
-	status, _ := c.cleanupLastStatus.Load().(string)
-	result, _ := c.cleanupLastResult.Load().(string)
-	if status == "" {
-		status = "pending"
-	}
-	if result == "" {
-		result = "cleanup has not run yet"
-	}
-
+func cleanupResultStats(summary cleanupRunSummary) map[string]interface{} {
 	return map[string]interface{}{
-		"cleanup_runs":                c.cleanupRuns.Load(),
-		"cleanup_last_at_unix_ms":     c.cleanupLastAt.Load(),
-		"cleanup_last_duration_ms":    c.cleanupLastDurationMs.Load(),
-		"cleanup_last_warning_count":  c.cleanupLastWarnings.Load(),
-		"cleanup_last_freed_bytes":    c.cleanupLastFreedBytes.Load(),
-		"cleanup_last_removed_items":  c.cleanupLastRemovedItems.Load(),
-		"cleanup_total_freed_bytes":   c.cleanupTotalFreedBytes.Load(),
-		"cleanup_total_removed_items": c.cleanupTotalRemovedItems.Load(),
-		"cleanup_last_status":         status,
-		"cleanup_last_result":         result,
+		"cleanup_status":              summary.status,
+		"cleanup_result":              summary.result,
+		"cleanup_warning_count":       int64(summary.scan.errors),
+		"cleanup_freed_bytes":         summary.freedBytes,
+		"cleanup_removed_items":       int64(summary.removedDiskItems),
+		"cleanup_force_closed_items":  int64(summary.forcedClosedItems),
+		"cleanup_closed_idle_items":   int64(summary.closedIdleItems),
+		"cleanup_empty_dirs_removed":  int64(summary.scan.emptyDirsRemoved),
+		"cleanup_orphan_meta_removed": int64(summary.scan.orphanMetadataRemoved),
 	}
 }
 
@@ -720,7 +657,6 @@ func (c *Cache) evict() cleanupRunSummary {
 	c.cleanupMu.Lock()
 	defer c.cleanupMu.Unlock()
 
-	start := time.Now()
 	now := utils.Now()
 
 	closedIdleItems := c.cleanupItems(now, false)
@@ -762,8 +698,7 @@ func (c *Cache) evict() cleanupRunSummary {
 	c.totalSize.Store(totalSize)
 	c.storeDiskStats(scan.candidates, removedKeys)
 
-	summary := c.storeCleanupSummary(cleanupRunSummary{
-		startedAt:         start,
+	summary := c.finalizeCleanupSummary(cleanupRunSummary{
 		scan:              scan,
 		scanPasses:        scanPasses,
 		closedIdleItems:   closedIdleItems,
@@ -778,10 +713,9 @@ func (c *Cache) evict() cleanupRunSummary {
 }
 
 // RunCleanup executes the same cache cleanup path used by the background loop
-// and returns the latest cleanup maintenance stats for API callers.
+// and returns this run's maintenance result for API callers.
 func (c *Cache) RunCleanup() map[string]interface{} {
-	c.evict()
-	return c.cleanupStats()
+	return cleanupResultStats(c.evict())
 }
 
 // PurgeCache removes all cached disk items that are not currently in use.
@@ -789,7 +723,6 @@ func (c *Cache) PurgeCache() map[string]interface{} {
 	c.cleanupMu.Lock()
 	defer c.cleanupMu.Unlock()
 
-	start := time.Now()
 	now := utils.Now()
 	forcedClosed := c.cleanupItems(now, true)
 	scan := c.scanDiskCandidates()
@@ -813,8 +746,6 @@ func (c *Cache) PurgeCache() map[string]interface{} {
 	}
 
 	summary := purgeRunSummary{
-		startedAt:        start,
-		duration:         time.Since(start),
 		scan:             scan,
 		forcedClosed:     forcedClosed,
 		removedDiskItems: removedCount,
@@ -830,7 +761,6 @@ func (c *Cache) PurgeCache() map[string]interface{} {
 	return map[string]interface{}{
 		"purge_status":              summary.status,
 		"purge_result":              summary.result,
-		"purge_duration_ms":         summary.duration.Milliseconds(),
 		"purge_warning_count":       int64(summary.scan.errors),
 		"purge_freed_bytes":         summary.freedBytes,
 		"purge_removed_items":       int64(summary.removedDiskItems),
@@ -854,8 +784,6 @@ func (c *Cache) Close() error {
 	c.items.Clear()
 	c.itemCount.Store(0)
 	c.diskItems.Store(0)
-	c.oldestDiskItemAccess.Store(0)
-	c.oldestDiskItemName.Store("")
 
 	return nil
 }
@@ -947,17 +875,6 @@ func (c *Cache) GetStats() map[string]interface{} {
 		"total_downloaded":  c.totalDownloaded.Load(),
 		"download_speed":    c.downloadSpeed.Load(),
 		"circuit_breakers":  c.circuitBreakers.Load(),
-	}
-
-	if oldestAccess := c.oldestDiskItemAccess.Load(); oldestAccess > 0 {
-		if oldestName, ok := c.oldestDiskItemName.Load().(string); ok && oldestName != "" {
-			stats["oldest_item_name"] = oldestName
-			stats["oldest_item_at_unix_ms"] = oldestAccess
-		}
-	}
-
-	for key, value := range c.cleanupStats() {
-		stats[key] = value
 	}
 
 	return stats
