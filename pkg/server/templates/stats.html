@@ -40,10 +40,6 @@
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    #mount-content .mount-cache-storage-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
     #mount-content .mount-stat-grid > .stat {
         border-left: 1px dashed color-mix(in oklab, var(--color-base-content) 16%, transparent);
         min-height: 9.5rem;
@@ -55,14 +51,6 @@
     }
 
     #mount-content .mount-stat-grid > .stat:nth-child(n + 5) {
-        border-top: 1px dashed color-mix(in oklab, var(--color-base-content) 12%, transparent);
-    }
-
-    #mount-content .mount-cache-storage-grid > .stat:nth-child(3n + 1) {
-        border-left: 0;
-    }
-
-    #mount-content .mount-cache-storage-grid > .stat:nth-child(n + 4) {
         border-top: 1px dashed color-mix(in oklab, var(--color-base-content) 12%, transparent);
     }
 
@@ -87,10 +75,6 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        #mount-content .mount-cache-storage-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
         #mount-content .mount-stat-grid > .stat:nth-child(odd) {
             border-left: 0;
         }
@@ -99,17 +83,6 @@
             border-top: 1px dashed color-mix(in oklab, var(--color-base-content) 12%, transparent);
         }
 
-        #mount-content .mount-cache-storage-grid > .stat:nth-child(3n + 1) {
-            border-left: 1px dashed color-mix(in oklab, var(--color-base-content) 16%, transparent);
-        }
-
-        #mount-content .mount-cache-storage-grid > .stat:nth-child(odd) {
-            border-left: 0;
-        }
-
-        #mount-content .mount-cache-storage-grid > .stat:nth-child(n + 3) {
-            border-top: 1px dashed color-mix(in oklab, var(--color-base-content) 12%, transparent);
-        }
     }
 
     @media (max-width: 639px) {
@@ -559,6 +532,15 @@
                 : cacheHitRate > 0.5 ? 'text-warning'
                     : cacheHits + cacheMisses === 0 ? 'text-base-content/50' : 'text-error';
             const circuitBreakers = detail.cache_circuit_breakers || 0;
+            const cacheHealthClass = circuitBreakers > 0 ? 'text-warning' : 'text-success';
+            const cacheHealthLabel = circuitBreakers > 0 ? 'Attention' : 'OK';
+            const cacheHealthDesc = circuitBreakers > 0
+                ? `${formatNumber(circuitBreakers)} ${circuitBreakers === 1 ? 'file' : 'files'} temporarily paused`
+                : 'Cache reads normal';
+            const cacheHealthTitle = circuitBreakers > 0
+                ? 'Decypharr paused cache reads for these files after repeated provider errors. It will retry automatically.'
+                : 'Cache reads are operating normally.';
+            const cacheHealthIcon = circuitBreakers > 0 ? 'bi-shield-exclamation' : 'bi-shield-check';
 
             let html = `
                 <div class="mount-stat-section-title">Current Activity</div>
@@ -615,7 +597,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="mount-stat-grid mount-cache-storage-grid">
+                <div class="mount-stat-grid">
                     <div class="stat">
                         <div class="stat-figure text-info">
                             <i class="bi bi-archive text-2xl"></i>
@@ -640,21 +622,15 @@
                         <div class="stat-value mount-stat-value-compact text-accent">${formatNumber(activeCacheItems)}</div>
                         <div class="stat-desc">Resident in ${cacheType} memory</div>
                     </div>
-            `;
-
-            // Show circuit breaker warning if any are tripped
-            if (circuitBreakers > 0) {
-                html += `
                     <div class="stat">
-                        <div class="stat-figure text-error">
-                            <i class="bi bi-exclamation-triangle text-2xl"></i>
+                        <div class="stat-figure ${cacheHealthClass}">
+                            <i class="bi ${cacheHealthIcon} text-2xl"></i>
                         </div>
-                        <div class="stat-title">Circuit Breakers</div>
-                        <div class="stat-value text-error">${circuitBreakers}</div>
-                        <div class="stat-desc text-error">Downloads paused (cooldown)</div>
+                        <div class="stat-title">Cache Health</div>
+                        <div class="stat-value mount-stat-value-compact ${cacheHealthClass}">${cacheHealthLabel}</div>
+                        <div class="stat-desc ${cacheHealthClass}" title="${window.decypharrUtils.escapeHtml(cacheHealthTitle)}">${cacheHealthDesc}</div>
                     </div>
-                `;
-            }
+            `;
 
             html += `
                 </div>
