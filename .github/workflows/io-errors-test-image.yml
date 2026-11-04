@@ -1,0 +1,48 @@
+name: IO Errors Test Image
+
+on:
+  push:
+    branches:
+      - test-image/fix-io-errors
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/decypharr
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set image tag suffix
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          build-args: |
+            VERSION=2.7.2
+            CHANNEL=io-errors
+          tags: |
+            ${{ env.IMAGE }}:fix-io-errors
+            ${{ env.IMAGE }}:fix-io-errors-${{ env.SHORT_SHA }}
+            ${{ env.IMAGE }}:fix-io-errors-${{ github.sha }}
+          push: true
