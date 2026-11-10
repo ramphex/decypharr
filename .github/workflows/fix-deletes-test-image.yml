@@ -42,7 +42,6 @@ jobs:
             VERSION=2.7.2
             CHANNEL=fix-deletes
           tags: |
-            ${{ env.IMAGE }}:fix-deletes
             ${{ env.IMAGE }}:fix-deletes-${{ env.SHORT_SHA }}
             ${{ env.IMAGE }}:fix-deletes-${{ github.sha }}
           push: true
