@@ -4,6 +4,7 @@ package hanwen
 
 import (
 	"context"
+	"errors"
 	"path"
 	"sync/atomic"
 	"syscall"
@@ -403,7 +404,10 @@ func (d *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 		return syscall.ENOENT
 	}
 
-	if err := d.vfs.GetManager().RemoveEntry(info); err != nil {
+	if err := d.vfs.GetManager().RemoveEmptyEntry(info); err != nil {
+		if errors.Is(err, manager.ErrFolderNotEmpty) {
+			return syscall.ENOTEMPTY
+		}
 		d.logger.Error().Err(err).Str("dir", d.name).Str("torrent", name).Msg("Failed to remove torrent from source")
 		return syscall.EIO
 	}
