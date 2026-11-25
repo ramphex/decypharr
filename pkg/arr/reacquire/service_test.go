@@ -375,7 +375,7 @@ func TestWaitingTransitionFindsExistingCompleteEpisodeReplacement(t *testing.T) 
 	job, err := service.Reacquire(Request{
 		EntryID: broken.EntryID,
 		FileID:  broken.EntryFileID,
-		Cause:   CauseStream,
+		Cause:   CauseManual,
 	})
 	if err != nil {
 		t.Fatal(err)

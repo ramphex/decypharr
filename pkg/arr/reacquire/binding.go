@@ -190,6 +190,7 @@ type Job struct {
 	EntryID                string     `json:"entryId"`
 	FileID                 string     `json:"fileId"`
 	DownloadID             string     `json:"downloadId,omitempty"`
+	FileScoped             bool       `json:"fileScoped,omitempty"` // replaces one file of a multi-file download, without failing the grab
 	Bindings               []Binding  `json:"bindings"`
 	ReplacementDownloadID  string     `json:"replacementDownloadId,omitempty"`
 	ReplacementDownloadIDs []string   `json:"replacementDownloadIds,omitempty"`

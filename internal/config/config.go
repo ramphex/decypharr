@@ -230,6 +230,10 @@ type RepairConfig struct {
 	// download per file probed.
 	VerifyContent bool `json:"verify_content,omitempty"`
 
+	// DisableStreamReacquire stops a missing article during playback from
+	// asking the Arr to replace the file. The read still fails.
+	DisableStreamReacquire bool `json:"disable_stream_reacquire,omitempty"`
+
 	// StopSchedule, when set, stops an in-progress repair sweep at this time/interval
 	// (same formats as Schedule: clock time, cron expression, or duration).
 	// A repair sweep still running when StopSchedule fires is cancelled before it
@@ -243,7 +247,7 @@ type RepairConfig struct {
 func (r RepairConfig) IsZero() bool {
 	return !r.Enabled && r.Source == "" && r.Schedule == "" && r.Workers == 0 &&
 		r.NNTPConnectionPercent == 0 && r.Strategy == "" && r.RecheckInterval == "" && len(r.Arrs) == 0 &&
-		!r.AutoRepair && r.StopSchedule == ""
+		!r.AutoRepair && r.StopSchedule == "" && !r.DisableStreamReacquire
 }
 
 type Config struct {

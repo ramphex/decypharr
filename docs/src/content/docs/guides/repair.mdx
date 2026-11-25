@@ -73,6 +73,7 @@ You can force a recheck on any one entry from the Browse UI or the API. This wor
 | `arrs`                    | Optional filter when `source=arr`. Empty list means all eligible Arrs.                   | `[]`        |
 | `auto_repair`             | When `true`, broken Arr-managed files are deleted through Arr and searched again. When `false`, the sweep is detect-only. | `false` |
 | `verify_content`          | During NZB probes, also read each media file's head through the streaming stack and check for a valid container signature. Finds files whose articles exist but were assembled wrong. Downloads one article per file probed. | `false` |
+| `disable_stream_reacquire` | When `true`, a missing article during playback only fails the read. When `false`, the Arr replaces the unreadable file. For a multi-file download such as a season pack, only that file is replaced and the grab is not failed. | `false` |
 | `notify_on_complete`      | Send a notification when a sweep finishes.                                               | `false`     |
 | `nntp_connection_percent` | Percentage of NNTP connections the probe is allowed to use. Avoids starving downloads.   | `20`        |
 | `stop_schedule`           | Optional cron expression, clock time, or interval. If a repair sweep is still running when this fires, it's stopped early. Leave empty to always run to completion. | — |
