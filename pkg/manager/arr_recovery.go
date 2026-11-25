@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/sirrobot01/decypharr/internal/config"
 	"github.com/sirrobot01/decypharr/pkg/arr/reacquire"
 )
 
@@ -46,7 +47,7 @@ func (m *Manager) lookupArrBinding(entryID, fileID string) (reacquire.Binding, b
 
 func (m *Manager) submitStreamReacquire(entryID, fileID string) {
 	recovery := m.recoveryService()
-	if recovery == nil || entryID == "" || fileID == "" {
+	if recovery == nil || entryID == "" || fileID == "" || config.Get().Repair.DisableStreamReacquire {
 		return
 	}
 	// Files can be unclaimed or still waiting for the Arr index.

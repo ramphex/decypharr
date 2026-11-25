@@ -46,7 +46,27 @@ func (s *Service) Reacquire(request Request) (*Job, error) {
 }
 
 func (s *Service) enqueue(request Request, binding Binding) (*Job, error) {
+	var bindings []Binding
+	if binding.DownloadID != "" {
+		bindings = s.index.ByDownloadID(binding.ArrName, binding.DownloadID)
+	}
+	bindings = slices.DeleteFunc(bindings, func(binding Binding) bool {
+		return !binding.AuthorizesMutation()
+	})
+	// One unreadable file of a season pack must not replace the whole pack:
+	// automatic requests replace only that file and search for its episodes
+	// instead of failing the grab, which would blocklist the release.
+	fileScoped := request.Cause != CauseManual && len(bindings) > 1
+	if fileScoped || len(bindings) == 0 {
+		bindings = []Binding{binding}
+	}
+	if fileScoped && (request.Strategy == StrategyHistoryFailed || request.Strategy == StrategyInteractiveBest) {
+		request.Strategy = StrategyCommandSearch
+	}
 	key := keyForBinding(binding)
+	if fileScoped {
+		key = fileKey(binding)
+	}
 
 	s.jobsMu.Lock()
 	if id, exists := s.activeReacquisitions[key]; exists {
@@ -69,16 +89,6 @@ func (s *Service) enqueue(request Request, binding Binding) (*Job, error) {
 		}
 	}
 
-	var bindings []Binding
-	if binding.DownloadID != "" {
-		bindings = s.index.ByDownloadID(binding.ArrName, binding.DownloadID)
-	}
-	bindings = slices.DeleteFunc(bindings, func(binding Binding) bool {
-		return !binding.AuthorizesMutation()
-	})
-	if len(bindings) == 0 {
-		bindings = []Binding{binding}
-	}
 	now := s.now()
 	job := Job{
 		ID:         uuid.NewString(),
@@ -90,6 +100,7 @@ func (s *Service) enqueue(request Request, binding Binding) (*Job, error) {
 		EntryID:    request.EntryID,
 		FileID:     request.FileID,
 		DownloadID: binding.DownloadID,
+		FileScoped: fileScoped,
 		Bindings:   bindings,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -536,11 +547,15 @@ func keyForBinding(binding Binding) jobKey {
 	if binding.DownloadID != "" {
 		return jobKey{arrName: binding.ArrName, downloadID: binding.DownloadID}
 	}
+	return fileKey(binding)
+}
+
+func fileKey(binding Binding) jobKey {
 	return jobKey{arrName: binding.ArrName, entryID: binding.EntryID, fileID: binding.EntryFileID}
 }
 
 func keyForJob(job Job) jobKey {
-	if job.DownloadID != "" {
+	if job.DownloadID != "" && !job.FileScoped {
 		return jobKey{arrName: job.ArrName, downloadID: job.DownloadID}
 	}
 	return jobKey{arrName: job.ArrName, entryID: job.EntryID, fileID: job.FileID}
